@@ -15,7 +15,7 @@ const PORT = Number(process.env.PORT || 3000);
 const BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI || `${BASE_URL}/auth/instagram/callback`;
 const GRAPH_VERSION = process.env.INSTAGRAM_GRAPH_VERSION || 'v24.0';
-const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const GRAPH = `https://graph.instagram.com/${GRAPH_VERSION}`;
 const app = express();
 
 function required(name) {
@@ -228,8 +228,7 @@ async function ensureFreshAccount(account) {
   return { ...account, token: refreshed.access_token, token_expires_at: expiresAt };
 }
 
-// A Meta ainda usa endpoints Graph sob o dominio graph.facebook.com para publicar,
-// mesmo quando a conexao da conta foi feita pelo Instagram Login sem Facebook Page.
+// Instagram Login usa graph.instagram.com para criar, consultar e publicar conteudo.
 async function createContainer(accountId, token, mediaUrl, text) {
   const body = new URLSearchParams({ media_type: 'REELS', video_url: mediaUrl, caption: text, share_to_feed: 'true', access_token: token });
   let response;
