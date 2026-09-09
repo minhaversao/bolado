@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Agendador Instagram</title>
+  <style>
+    :root{font-family:Inter,system-ui,Arial,sans-serif;color:#f4f4f5;background:#0b0d12;color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0b0d12}.wrap{max-width:1240px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}h1{font-size:26px;margin:0 0 5px}.muted{color:#9ba3b4}.small{font-size:13px}.card{background:#12151c;border:1px solid #272d39;border-radius:16px;padding:18px;margin-top:16px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:6px}input,textarea,select,button{font:inherit}input,textarea,select{background:#0e1117;border:1px solid #343b49;border-radius:10px;padding:10px;color:#fff}textarea{min-height:82px;resize:vertical}button,.btn{border:0;border-radius:10px;padding:10px 14px;background:#6d4aff;color:#fff;cursor:pointer;text-decoration:none;display:inline-block}button.secondary{background:#292f3b}button.danger{background:#7b2730}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.notice{display:none;background:#17311f;color:#9ef0b7;border-radius:10px;padding:10px 12px;margin-top:12px}.notice.show{display:block}.account{display:flex;gap:10px;align-items:center}.avatar{width:42px;height:42px;border-radius:50%;background:#222;object-fit:cover}.ok{color:#4ad17d}.warn{color:#f0c15b}.bad{color:#ff7474}.planner{margin-top:14px;display:flex;flex-direction:column;gap:10px}.planrow{border:1px solid #2a3140;border-radius:12px;padding:12px;display:grid;grid-template-columns:180px 190px 1fr 1fr;gap:10px;align-items:start}.filename{overflow-wrap:anywhere;font-weight:600}.queuewrap{overflow:auto}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;border-bottom:1px solid #282e39;padding:10px 8px;vertical-align:top}th{font-size:11px;text-transform:uppercase;color:#9ba3b4}.error{max-width:360px;white-space:normal}.status-scheduled{color:#b8b3ff}.status-processing,.status-retrying{color:#f0c15b}.status-published{color:#4ad17d}.status-failed,.status-blocked{color:#ff7474}.uploadbar{height:8px;background:#282d38;border-radius:999px;overflow:hidden;display:none}.uploadbar>div{height:100%;width:35%;background:#6d4aff;animation:move 1.2s infinite alternate}@keyframes move{to{transform:translateX(180%)}}@media(max-width:920px){.planrow{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.wrap{padding:14px}.hide-mobile{display:none}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><h1>Agendador pessoal do Instagram</h1><div class="muted">Escolha os vídeos uma vez, revise legendas e horários e deixe a fila publicar sozinha.</div></div>
+    <a class="btn" href="/auth/instagram">Conectar Instagram</a>
+  </div>
+  <div id="connected" class="notice">Instagram conectado com sucesso.</div>
+
+  <section class="card">
+    <div class="top"><div><strong>Conta</strong><div class="muted small">Conexão por Instagram Login. Não precisa vincular uma Página do Facebook.</div></div><button class="secondary" onclick="loadAll()">Atualizar</button></div>
+    <div id="account" class="muted" style="margin-top:12px">Carregando...</div>
+  </section>
+
+  <section class="card">
+    <strong>1. Escolha os vídeos</strong>
+    <div class="muted small" style="margin:4px 0 14px">Até 50 por lote. Vídeos repetidos já agendados/publicados são ignorados por padrão.</div>
+    <input id="videos" type="file" multiple accept="video/mp4,video/quicktime,.m4v">
+  </section>
+
+  <section class="card">
+    <strong>2. Monte a agenda do lote</strong>
+    <div class="grid" style="margin-top:14px">
+      <label class="field"><span>Primeiro horário</span><input id="startAt" type="datetime-local"></label>
+      <label class="field"><span>Intervalo entre vídeos (minutos)</span><input id="interval" type="number" min="1" value="180"></label>
+      <label class="field"><span>Legenda padrão</span><textarea id="baseCaption" placeholder="Ex.: Confira esse momento da cena."></textarea></label>
+      <label class="field"><span>Hashtags padrão</span><textarea id="baseHashtags"></textarea></label>
+    </div>
+    <div class="actions" style="margin-top:12px">
+      <button class="secondary" onclick="applySchedule()">Distribuir horários</button>
+      <button class="secondary" onclick="applyText()">Aplicar texto a todos</button>
+      <span class="muted small">Depois você pode editar cada vídeo separadamente.</span>
+    </div>
+    <div id="planner" class="planner"><div class="muted">Selecione os vídeos acima.</div></div>
+  </section>
+
+  <section class="card">
+    <div class="top"><div><strong>3. Agendar tudo</strong><div class="muted small">Pode fechar o navegador depois que o upload terminar. O servidor assume a fila.</div></div><button id="scheduleBtn" onclick="scheduleBatch()">Agendar lote</button></div>
+    <div id="uploadStatus" class="muted small" style="margin-top:10px"></div>
+    <div id="uploadbar" class="uploadbar" style="margin-top:10px"><div></div></div>
+  </section>
+
+  <section class="card">
+    <div class="top"><div><strong>Fila e histórico</strong><div class="muted small">Falhas temporárias tentam novamente automaticamente. Falha incerta de publicação é bloqueada para evitar Reel duplicado.</div></div><span id="summary" class="muted small"></span></div>
+    <div class="queuewrap"><table><thead><tr><th>ID</th><th>Vídeo</th><th>Quando</th><th>Status</th><th>Tentativas</th><th class="hide-mobile">Detalhe</th><th>Ações</th></tr></thead><tbody id="posts"><tr><td colspan="7" class="muted">Carregando...</td></tr></tbody></table></div>
+  </section>
+</div>
+<script>
+const $=s=>document.querySelector(s); let files=[]; let accountId='';
+const esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+function localValue(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`}
+function fmt(v){try{return new Date(v).toLocaleString('pt-BR')}catch{return v}}
+async function api(url,opt){const r=await fetch(url,opt);const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||`Erro ${r.status}`);return data}
+function statusLabel(s){return ({scheduled:'Agendado',processing:'Processando',retrying:'Nova tentativa',published:'Publicado',failed:'Falhou',blocked:'Verificar Instagram'})[s]||s}
+function setDefaults(){const d=new Date(Date.now()+15*60_000);d.setSeconds(0,0);$('#startAt').value=localValue(d)}
+async function loadConfig(){try{const c=await api('/api/config');if(!$('#baseHashtags').value)$('#baseHashtags').value=c.defaultHashtags||''}catch{}}
+async function loadAccounts(){const rows=await api('/api/accounts');if(!rows.length){$('#account').innerHTML='<span class="bad">Nenhuma conta conectada. Use “Conectar Instagram”.</span>';accountId='';return}const a=rows[0];accountId=a.id;$('#account').innerHTML=`<div class="account"><img class="avatar" src="${esc(a.profile_picture_url)}" onerror="this.style.visibility='hidden'"><div><strong>@${esc(a.username)}</strong> <span class="ok">● conectada</span><div class="muted small">${esc(a.account_type||'Conta profissional')} · renovação automática do token</div></div></div>`}
+function planRows(){return [...document.querySelectorAll('.planrow')]}
+function renderPlanner(){const box=$('#planner');if(!files.length){box.innerHTML='<div class="muted">Selecione os vídeos acima.</div>';return}box.innerHTML=files.map((f,i)=>`<div class="planrow" data-i="${i}"><div><div class="filename">${i+1}. ${esc(f.name)}</div><div class="muted small">${(f.size/1024/1024).toFixed(1)} MB</div></div><label class="field"><span class="small">Horário</span><input class="p-time" type="datetime-local"></label><label class="field"><span class="small">Legenda</span><textarea class="p-caption"></textarea></label><label class="field"><span class="small">Hashtags</span><textarea class="p-hashtags"></textarea></label></div>`).join('');applySchedule();applyText()}
+function applySchedule(){const start=new Date($('#startAt').value);const interval=Math.max(1,Number($('#interval').value||180));if(Number.isNaN(start.getTime()))return;planRows().forEach((r,i)=>r.querySelector('.p-time').value=localValue(new Date(start.getTime()+i*interval*60_000)))}
+function applyText(){const caption=$('#baseCaption').value,hashtags=$('#baseHashtags').value;planRows().forEach(r=>{r.querySelector('.p-caption').value=caption;r.querySelector('.p-hashtags').value=hashtags})}
+$('#videos').addEventListener('change',e=>{files=[...e.target.files];renderPlanner()});
+async function scheduleBatch(){if(!files.length)return alert('Selecione os vídeos.');if(!accountId)return alert('Conecte o Instagram primeiro.');const rows=planRows();const plan=rows.map(r=>({scheduled_at:new Date(r.querySelector('.p-time').value).toISOString(),caption:r.querySelector('.p-caption').value,hashtags:r.querySelector('.p-hashtags').value}));const fd=new FormData();files.forEach(f=>fd.append('videos',f));fd.append('account_id',accountId);fd.append('plan',JSON.stringify(plan));const btn=$('#scheduleBtn'),st=$('#uploadStatus'),bar=$('#uploadbar');btn.disabled=true;bar.style.display='block';st.textContent=`Enviando e preparando ${files.length} vídeo(s). Mantenha esta aba aberta só até terminar o upload...`;try{const data=await api('/api/schedule-batch',{method:'POST',body:fd});let msg=`${data.created.length} vídeo(s) agendado(s).`;if(data.skipped?.length)msg+=` ${data.skipped.length} repetido(s) ignorado(s).`;st.textContent=msg;files=[];$('#videos').value='';renderPlanner();await loadPosts()}catch(e){st.textContent='Falhou: '+e.message}finally{btn.disabled=false;bar.style.display='none'}}
+async function retryPost(id,blocked){if(blocked&&!confirm('Confira primeiro no Instagram se esse Reel NÃO foi publicado. Se tiver certeza que não publicou, clique OK para tentar novamente.'))return;try{await api(`/api/posts/${id}/retry`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clear_container:Boolean(blocked)})});await loadPosts()}catch(e){alert(e.message)}}
+async function deletePost(id){if(!confirm('Excluir este item da fila/histórico?'))return;try{await api(`/api/posts/${id}`,{method:'DELETE'});await loadPosts()}catch(e){alert(e.message)}}
+async function loadPosts(){const rows=await api('/api/posts');const counts=rows.reduce((a,p)=>(a[p.status]=(a[p.status]||0)+1,a),{});$('#summary').textContent=`${counts.scheduled||0} agendados · ${counts.retrying||0} em retry · ${counts.published||0} publicados · ${(counts.failed||0)+(counts.blocked||0)} com atenção`;const b=$('#posts');if(!rows.length){b.innerHTML='<tr><td colspan="7" class="muted">Fila vazia.</td></tr>';return}b.innerHTML=rows.map(p=>`<tr><td>${p.id}</td><td>${esc(p.file_name)}</td><td>${fmt(p.scheduled_at)}</td><td class="status-${esc(p.status)}">${statusLabel(p.status)}</td><td>${p.attempt_count||0}</td><td class="hide-mobile error small ${p.error?'bad':'muted'}">${esc(p.error||'')}</td><td><div class="actions">${['failed','retrying'].includes(p.status)?`<button onclick="retryPost(${p.id},false)">Tentar agora</button>`:''}${p.status==='blocked'?`<button class="danger" onclick="retryPost(${p.id},true)">Conferi, tentar</button>`:''}${p.status!=='processing'?`<button class="secondary" onclick="deletePost(${p.id})">Excluir</button>`:''}</div></td></tr>`).join('')}
+async function loadAll(){try{await Promise.all([loadAccounts(),loadPosts(),loadConfig()])}catch(e){console.error(e)}}
+if(new URLSearchParams(location.search).get('connected')==='1'){$('#connected').classList.add('show');history.replaceState({},'',location.pathname)}setDefaults();loadAll();setInterval(loadPosts,30000);
+</script>
+</body>
+</html>
