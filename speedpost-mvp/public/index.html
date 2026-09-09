@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rap Talis Scheduler</title>
+  <style>
+    :root{font-family:Inter,system-ui,Arial,sans-serif;color:#f4f4f5;background:#0b0d12;color-scheme:dark}
+    *{box-sizing:border-box} body{margin:0;background:#0b0d12} .wrap{max-width:1180px;margin:auto;padding:28px}
+    h1{margin:0 0 6px;font-size:28px}.muted{color:#9ca3af}.card{background:#12151c;border:1px solid #252a36;border-radius:16px;padding:18px;margin-top:18px}
+    button,.btn,input,textarea,select{font:inherit} button,.btn{border:0;border-radius:10px;padding:11px 15px;cursor:pointer;background:#6d4aff;color:#fff;text-decoration:none;display:inline-block}
+    button.secondary{background:#252a36}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:flex;flex-direction:column;gap:7px}
+    input,textarea,select{width:100%;background:#0e1117;border:1px solid #303746;border-radius:10px;padding:11px;color:#fff}textarea{min-height:105px;resize:vertical}
+    .account{display:flex;align-items:center;gap:12px}.avatar{width:42px;height:42px;border-radius:50%;object-fit:cover;background:#222}.ok{color:#49d17d}.bad{color:#ff6b6b}.pending{color:#f6c453}
+    table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;border-bottom:1px solid #272c36;padding:11px 8px;vertical-align:top}th{font-size:12px;color:#9ca3af;text-transform:uppercase}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{padding:7px 10px;font-size:13px}
+    .notice{padding:11px 13px;border-radius:10px;background:#17301f;color:#9ef0b7;margin-top:14px;display:none}.notice.show{display:block}.top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}.small{font-size:13px}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}.wrap{padding:16px}table{font-size:13px}.hide-mobile{display:none}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><h1>Rap Talis Scheduler</h1><div class="muted">Upload → armazenamento temporário → fila → Instagram API → histórico</div></div>
+    <a class="btn" href="/auth/instagram">Conectar Instagram</a>
+  </div>
+  <div id="connected" class="notice">Conta conectada com sucesso.</div>
+
+  <section class="card">
+    <div class="top"><div><strong>Conta conectada</strong><div class="muted small">A senha do Instagram não é armazenada.</div></div><button class="secondary" onclick="loadAll()">Atualizar</button></div>
+    <div id="accounts" style="margin-top:14px" class="muted">Carregando...</div>
+  </section>
+
+  <section class="card">
+    <strong>Novo lote</strong>
+    <div class="muted small" style="margin-top:4px">Selecione vários vídeos de uma vez. O sistema agenda cada arquivo automaticamente a partir do primeiro horário.</div>
+    <form id="uploadForm" style="margin-top:16px">
+      <div class="grid">
+        <label class="field"><span>Vídeos</span><input id="videos" name="videos" type="file" accept="video/mp4,video/quicktime,.m4v" multiple required></label>
+        <label class="field"><span>Conta</span><select id="account_id" name="account_id"></select></label>
+        <label class="field"><span>Primeira publicação</span><input id="start_at" name="start_at" type="datetime-local" required></label>
+        <label class="field"><span>Intervalo entre posts (minutos)</span><input name="interval_minutes" type="number" value="180" min="1" required></label>
+      </div>
+      <label class="field" style="margin-top:14px"><span>Legenda padrão do lote</span><textarea name="caption" placeholder="Escreva a legenda. Na próxima fase a IA gera uma legenda diferente para cada vídeo."></textarea></label>
+      <div class="actions" style="margin-top:14px"><button type="submit">Hospedar e agendar lote</button><span id="uploadStatus" class="muted small" style="align-self:center"></span></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="top"><div><strong>Fila e histórico</strong><div class="muted small">O servidor publica mesmo com o navegador fechado.</div></div><span id="queueSummary" class="muted small"></span></div>
+    <div style="overflow:auto"><table><thead><tr><th>ID</th><th>Arquivo</th><th>Conta</th><th>Agendado</th><th>Status</th><th class="hide-mobile">Erro</th><th>Ações</th></tr></thead><tbody id="posts"><tr><td colspan="7" class="muted">Carregando...</td></tr></tbody></table></div>
+  </section>
+</div>
+<script>
+const qs = s => document.querySelector(s);
+function fmtDate(value){if(!value)return '-';try{return new Date(value).toLocaleString('pt-BR')}catch{return value}}
+function esc(s=''){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+function statusClass(s){return s==='published'?'ok':s==='failed'?'bad':s==='processing'?'pending':''}
+function statusText(s){return ({scheduled:'Agendado',processing:'Meta processando',published:'Publicado',failed:'Falhou'})[s]||s}
+async function api(url,options){const r=await fetch(url,options);const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||`Erro ${r.status}`);return data}
+async function loadAccounts(){
+  const rows=await api('/api/accounts');
+  const box=qs('#accounts'), select=qs('#account_id');select.innerHTML='';
+  if(!rows.length){box.innerHTML='<span class="bad">Nenhuma conta conectada.</span>';select.innerHTML='<option value="">Conecte o Instagram primeiro</option>';return}
+  box.innerHTML=rows.map(a=>`<div class="account"><img class="avatar" src="${esc(a.profile_picture_url||'')}" onerror="this.style.visibility='hidden'"><div><div><strong>@${esc(a.username)}</strong> <span class="ok">● conectado</span></div><div class="muted small">${esc(a.account_type||'Conta profissional')} · token até ${fmtDate(a.token_expires_at)}</div></div></div>`).join('');
+  rows.forEach(a=>{const o=document.createElement('option');o.value=a.id;o.textContent='@'+a.username;select.appendChild(o)});
+}
+async function loadPosts(){
+  const rows=await api('/api/posts'); const body=qs('#posts');
+  const counts=rows.reduce((a,p)=>(a[p.status]=(a[p.status]||0)+1,a),{});
+  qs('#queueSummary').textContent=`${counts.scheduled||0} agendados · ${counts.published||0} publicados · ${counts.failed||0} falhos`;
+  if(!rows.length){body.innerHTML='<tr><td colspan="7" class="muted">A fila está vazia.</td></tr>';return}
+  body.innerHTML=rows.map(p=>`<tr><td>${p.id}</td><td>${esc(p.file_name)}</td><td>@${esc(p.username||'')}</td><td>${fmtDate(p.scheduled_at)}</td><td class="${statusClass(p.status)}">${statusText(p.status)}</td><td class="hide-mobile bad small">${esc(p.error||'')}</td><td><div class="actions">${p.status==='failed'?`<button onclick="retryPost(${p.id})">Tentar de novo</button>`:''}${p.status!=='processing'?`<button class="secondary" onclick="deletePost(${p.id})">Excluir</button>`:''}</div></td></tr>`).join('');
+}
+async function loadAll(){try{await Promise.all([loadAccounts(),loadPosts()])}catch(e){alert(e.message)}}
+async function retryPost(id){try{await api(`/api/posts/${id}/retry`,{method:'POST'});await loadPosts()}catch(e){alert(e.message)}}
+async function deletePost(id){if(!confirm('Excluir este item da fila?'))return;try{await api(`/api/posts/${id}`,{method:'DELETE'});await loadPosts()}catch(e){alert(e.message)}}
+qs('#uploadForm').addEventListener('submit',async e=>{
+  e.preventDefault(); const files=qs('#videos').files;if(!files.length)return;
+  const fd=new FormData(e.currentTarget); fd.delete('videos'); for(const f of files)fd.append('videos',f);
+  const local=new Date(qs('#start_at').value);fd.set('start_at',local.toISOString());
+  const st=qs('#uploadStatus');st.textContent=`Enviando ${files.length} vídeo(s)... não feche esta aba durante o upload.`;
+  try{const data=await api('/api/upload',{method:'POST',body:fd});st.textContent=`${data.created.length} vídeo(s) agendados com sucesso.`;e.currentTarget.reset();setDefaultTime();await loadPosts()}catch(err){st.textContent='Falhou: '+err.message}
+});
+function setDefaultTime(){const d=new Date(Date.now()+10*60*1000);d.setSeconds(0,0);const pad=n=>String(n).padStart(2,'0');qs('#start_at').value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`}
+if(new URLSearchParams(location.search).get('connected')==='1'){qs('#connected').classList.add('show');history.replaceState({},'',location.pathname)}
+setDefaultTime();loadAll();setInterval(loadPosts,30000);
+</script>
+</body>
+</html>
