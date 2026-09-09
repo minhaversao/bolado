@@ -1,0 +1,4 @@
+*.log
+*.tmp
+config.json
+queue-state.json
